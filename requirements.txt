@@ -4,3 +4,4 @@ plotly
 requests
 xlsxwriter
 openpyxl
+Pillow
