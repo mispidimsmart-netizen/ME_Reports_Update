@@ -32,8 +32,8 @@ st.set_page_config(page_title="PIDIM SMART Reports", layout="wide", page_icon=lo
 # ===== CSS =====
 st.markdown("""
 <style>
-/* Extra top padding so header is clear, and leave space for fixed print button */
-.block-container { padding-top: 2.8rem; }
+/* Give breathing room at top */
+.block-container { padding-top: 1.8rem; }
 
 /* Section titles */
 h3, .section-title { color:#065f46; font-weight:800; }
@@ -41,18 +41,24 @@ h3, .section-title { color:#065f46; font-weight:800; }
 /* Table header styling */
 thead th { background-color:#dcfce7 !important; font-weight:800 !important; }
 
-/* Header row slightly lower from top */
-.header-wrap { margin-top: 20px; margin-bottom: 8px; }
+/* Header row lower a bit */
+.header-wrap { margin-top: 18px; margin-bottom: 8px; }
 .header-wrap .org { font-size:30px; font-weight:900; color:#16a34a; line-height:1.1; }
 .header-wrap .proj { font-size:14px; color:#334155; margin-top:4px; }
 .header-wrap .credit { text-align:right; font-size:12px; line-height:1.2; }
 
-/* Fixed Print button at very top-right */
-#global-print { position: fixed; top: 8px; right: 12px; z-index: 9999; }
+/* Fixed Print button (green) at very top-right */
+#global-print { position: fixed; top: 8px; right: 12px; z-index: 10000; }
 #global-print button{
-  background-color:#16a34a; color:white; border:none; padding:8px 16px;
-  border-radius:8px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.15);
+  display:flex; align-items:center; gap:8px;
+  background-color:#16a34a; color:white; border:none; padding:8px 14px;
+  border-radius:10px; cursor:pointer; font-weight:700;
+  box-shadow:0 2px 8px rgba(0,0,0,.18);
 }
+#global-print button .icon { font-size:16px; line-height:1; }
+
+/* Make sure button is not overlapped by Streamlit toolbar */
+[data-testid="stToolbar"] { z-index: 1; }
 
 @media print {
   .stButton, .stDownloadButton, [data-testid="stSidebar"], #global-print { display:none !important; }
@@ -63,16 +69,26 @@ thead th { background-color:#dcfce7 !important; font-weight:800 !important; }
 </style>
 """, unsafe_allow_html=True)
 
+# ===== Top-right Print button (HTML) =====
+st.markdown("""
+<div id="global-print">
+  <button onclick="window.print()">
+    <span class="icon">🖨️</span> Print
+  </button>
+</div>
+""", unsafe_allow_html=True)
+
 # ===== Header UI =====
 with st.container():
     logo = load_logo_image()
-    col_logo, col_text, col_credit = st.columns([0.12, 0.58, 0.30])
+    # Make right column slightly wider to ensure right alignment
+    col_logo, col_text, col_credit = st.columns([0.12, 0.55, 0.33])
     with col_logo:
         st.image(logo, width=68)
     with col_text:
         st.markdown("<div class='header-wrap'><div class='org'>PIDIM Foundation</div><div class='proj'>Sustainable Microenterprise and Resilient Transformation (SMART) Project</div></div>", unsafe_allow_html=True)
     with col_credit:
-        st.markdown("""<div class="header-wrap credit">
+        st.markdown("""<div class="header-wrap credit" style="text-align:right;">
           <b>Created by,</b><br/>
           <b>Md. Moniruzzaman</b><br/>
           MIS &amp; Documentation Officer<br/>
@@ -80,9 +96,6 @@ with st.container():
           Pidim Foundation<br/>
           Cell: 01324 168100
         </div>""", unsafe_allow_html=True)
-
-# Fixed global print button (top-right)
-st.markdown("""<div id="global-print"><button onclick="window.print()">Print</button></div>""", unsafe_allow_html=True)
 
 def col_letter_to_pos(s):
     s=re.sub(r'[^A-Za-z]','',s); v=0
