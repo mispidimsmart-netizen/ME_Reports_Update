@@ -1,29 +1,38 @@
 # -*- coding: utf-8 -*-
-import os, re, base64
+import os, re
 import streamlit as st, pandas as pd, plotly.express as px, requests
 from io import StringIO, BytesIO
 
 URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkcagLu_YrYgQxmsO3DnHn90kqALkw9uDByX7UBNRUjaFKKQdE3V-6fm5ZcKGk_A/pub?gid=2143275417&single=true&output=csv"
 
-st.set_page_config(page_title="PIDIM SMART Reports", layout="wide")
+st.set_page_config(page_title="PIDIM SMART Reports", layout="wide", page_icon="assets/favicon.png")
 
-# ====== Minimal CSS (no green header), table header bold + light green, print fix ======
+# ====== Minimal CSS: remove big green header, keep header block with logo+name, make table headers bold+light-green ======
 st.markdown("""
 <style>
-/* Light theme polish */
+/* Remove Streamlit default top padding slightly */
 .block-container { padding-top: 0.6rem; }
-[data-testid="stSidebar"] { background-color: #f0fdf4; }
 
-/* Table header styling */
+/* Section titles */
+h3, .section-title { color:#065f46; font-weight:800; }
+
+/* Column/table headers */
 thead th { background-color:#dcfce7 !important; font-weight:800 !important; }
 
-/* Global print button styling */
-#global-print { text-align:right; margin-top:6px; }
+/* Header bar style (custom, not the old big green) */
+.app-header { display:flex; align-items:center; gap:14px; margin-bottom:10px; }
+.app-header .title { display:flex; flex-direction:column; }
+.app-header .title .org { font-size:28px; font-weight:800; color:#16a34a; }
+.app-header .title .proj { font-size:14px; color:#334155; }
+.app-header .credit { margin-left:auto; text-align:right; font-size:12px; line-height:1.2; }
+
+/* Print controls */
+#global-print { text-align:right; margin:6px 0 10px; }
 #global-print button{
   background-color:#16a34a; color:white; border:none; padding:8px 16px;
   border-radius:8px; cursor:pointer;
 }
-/* Print media */
+
 @media print {
   .stApp { visibility: visible; }
   .stButton, .stDownloadButton { display:none !important; }
@@ -35,10 +44,33 @@ thead th { background-color:#dcfce7 !important; font-weight:800 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# Single global print button (top-right)
-st.markdown("""<div id="global-print">
-<button onclick="window.print()">Print</button>
-</div>""", unsafe_allow_html=True)
+# Header with logo + names + credit
+with st.container():
+    c1, c2 = st.columns([0.7, 0.3])
+    with c1:
+        st.markdown("""
+        <div class="app-header">
+          <img src="assets/logo.png" width="64" alt="PIDIM Logo"/>
+          <div class="title">
+            <div class="org">PIDIM Foundation</div>
+            <div class="proj">Sustainable Microenterprise and Resilient Transformation (SMART) Project</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with c2:
+        st.markdown("""
+        <div class="credit">
+          <b>Created by,</b><br/>
+          <b>Md. Moniruzzaman</b><br/>
+          MIS &amp; Documentation Officer<br/>
+          SMART Project<br/>
+          Pidim Foundation<br/>
+          Cell: 01324 168100
+        </div>
+        """, unsafe_allow_html=True)
+
+# global print button
+st.markdown("""<div id="global-print"><button onclick="window.print()">Print</button></div>""", unsafe_allow_html=True)
 
 def col_letter_to_pos(s):
     s=re.sub(r'[^A-Za-z]','',s); v=0
@@ -74,18 +106,6 @@ def ensure_serial(df):
         d["Sl No"] = range(1, len(d)+1)
     else:
         d.insert(0, "Sl No", range(1, len(d)+1))
-    return d
-
-def add_grand_total(df, numeric_cols=None):
-    d=df.copy()
-    if numeric_cols is None:
-        numeric_cols = [c for c in d.columns if pd.api.types.is_numeric_dtype(d[c])]
-    totals = {c: pd.to_numeric(d[c], errors="coerce").sum() for c in numeric_cols}
-    row = {c: "" for c in d.columns}
-    row.update({"Branch Name":"Grand Total"})
-    for c,v in totals.items():
-        row[c] = v
-    d = pd.concat([d, pd.DataFrame([row])], ignore_index=True)
     return d
 
 HEADER_STYLE = [{"selector":"th","props":[("background-color","#dcfce7"),("font-weight","800")]},
@@ -133,7 +153,6 @@ def summarize_loan_table(agg):
     bad=loan["Branch Name"].astype(str).str.strip().str.lower().isin(["branch name","nan","nan total"])
     loan=loan[~bad].copy()
     loan=ensure_serial(loan)
-    # Ensure we display only up to Grand Total (no extra elements after)
     return loan
 
 def compute_poultry_me_and_birds(df_in, b, type_col, birds_col):
@@ -169,32 +188,33 @@ def compute_me_grants(df_in,b,gc):
     rep=ensure_serial(rep)
     return rep
 
-def average_ticket_size(loan):
-    base=loan[(~loan["Branch Name"].str.endswith(" Total")) & (loan["Branch Name"]!="Grand Total") & (loan["Types of Loan"]!="")]
-    agg=(base.groupby("Branch Name").agg(total_amount=("Amount of Loan","sum"), total_count=("# of Loan","sum")).reset_index())
-    agg["Avg Ticket Size"]=agg["total_amount"]/agg["total_count"].replace(0, pd.NA)
-    agg["Avg Ticket Size"]=agg["Avg Ticket Size"].fillna(0)
-    out=agg[["Branch Name","total_count","total_amount","Avg Ticket Size"]].rename(columns={"total_count":"# of Loan","total_amount":"Amount of Loan"})
-    out=ensure_serial(out)
-    return out
-
-def poultry_kpi_summary_counts(poultry_long):
-    wide = poultry_long.pivot_table(index="Branch Name", columns="Types of Poultry Rearing", values="# of MEs", aggfunc="sum").fillna(0).reset_index()
-    wide.columns=[c if isinstance(c,str) else c[1] for c in wide.columns]
-    if "Layer Rearing" not in wide: wide["Layer Rearing"]=0
-    if "Broiler Rearing" not in wide: wide["Broiler Rearing"]=0
-    wide["# of MEs"] = wide["Layer Rearing"] + wide["Broiler Rearing"]
-    wide=ensure_serial(wide)
-    return wide[["Sl No","Branch Name","Layer Rearing","Broiler Rearing","# of MEs"]]
+def add_grand_total(df, numeric_cols=None):
+    d=df.copy()
+    if numeric_cols is None:
+        numeric_cols = [c for c in d.columns if pd.api.types.is_numeric_dtype(d[c])]
+    totals = {c: pd.to_numeric(d[c], errors="coerce").sum() for c in numeric_cols}
+    row = {c: "" for c in d.columns}
+    row.update({"Branch Name":"Grand Total"})
+    for c,v in totals.items():
+        row[c] = v
+    d = pd.concat([d, pd.DataFrame([row])], ignore_index=True)
+    return d
 
 def to_excel_bytes(df_dict):
-    bio=BytesIO()
-    with pd.ExcelWriter(bio, engine="xlsxwriter") as writer:
-        for name, data in df_dict.items():
-            data.to_excel(writer, index=False, sheet_name=name[:31])
-        writer.book.close()
-    bio.seek(0)
-    return bio.getvalue()
+    bio = BytesIO()
+    last_err = None
+    for eng in ("xlsxwriter", "openpyxl"):
+        try:
+            with pd.ExcelWriter(bio, engine=eng) as writer:
+                for name, data in df_dict.items():
+                    data.to_excel(writer, index=False, sheet_name=name[:31])
+            bio.seek(0)
+            return bio.getvalue()
+        except Exception as e:
+            last_err = e
+            bio.seek(0); bio.truncate(0)
+            continue
+    raise RuntimeError(f"No Excel writer engine available (tried xlsxwriter, openpyxl): {last_err}")
 
 # ===== Data =====
 df=get_df()
@@ -206,50 +226,26 @@ loan = summarize_loan_table(loan_agg)
 poultry = compute_poultry_me_and_birds(df,b,pt,ub)
 grants = compute_me_grants(df,b,gcol)
 
-# Add Grand Total rows where requested
+# Add Grand Total to every main table except loan (loan already includes Grand Total and stops there)
 poultry = add_grand_total(poultry, numeric_cols=["# of MEs","# of Birds"])
 grants = add_grand_total(grants, numeric_cols=["Number on MEs","Amounts of Grants"])
 
-# KPI Summary totals
-pks = poultry_kpi_summary_counts(poultry[poultry["Branch Name"]!="Grand Total"])
-pks = add_grand_total(pks, numeric_cols=["Layer Rearing","Broiler Rearing","# of MEs"])
-
-# Average Ticket Size totals
-ats = average_ticket_size(loan)
-ats = add_grand_total(ats, numeric_cols=["# of Loan","Amount of Loan","Avg Ticket Size"])
-
-# Grants Utilization totals
-def grants_utilization_full(gdf):
-    rep = gdf.copy()
-    rep = rep[rep["Branch Name"]!="Grand Total"]
-    rep["Avg Grant per ME"] = (pd.to_numeric(rep["Amounts of Grants"], errors="coerce")/rep["Number on MEs"].replace(0, pd.NA)).fillna(0)
-    rep = ensure_serial(rep)
-    rep = add_grand_total(rep, numeric_cols=["Number on MEs","Amounts of Grants","Avg Grant per ME"])
-    return rep
-gu = grants_utilization_full(grants)
-
-# Top 5 tables (each with its own Grand Total for the shown rows)
-base=loan[(~loan["Branch Name"].str.endswith(" Total")) & (loan["Branch Name"]!="Grand Total") & (loan["Types of Loan"]!="")]
-topD = base.groupby("Branch Name")["Amount of Loan"].sum().sort_values(ascending=False).head(5).reset_index(name="Amount of Loan")
-topD = ensure_serial(topD); topD = add_grand_total(topD, numeric_cols=["Amount of Loan"])
-
-topB = poultry[poultry["Branch Name"]!="Grand Total"].groupby("Branch Name")["# of Birds"].sum().sort_values(ascending=False).head(5).reset_index(name="# of Birds")
-topB = ensure_serial(topB); topB = add_grand_total(topB, numeric_cols=["# of Birds"])
-
-topG = grants[grants["Branch Name"]!="Grand Total"].groupby("Branch Name")["Amounts of Grants"].sum().sort_values(ascending=False).head(5).reset_index(name="Amounts of Grants")
-topG = ensure_serial(topG); topG = add_grand_total(topG, numeric_cols=["Amounts of Grants"])
-
 # ===== UI =====
-st.markdown("### 📊 Branch Wise Loan Disbursement")
+st.markdown('<h3 class="section-title">📊 Branch Wise Loan Disbursement</h3>', unsafe_allow_html=True)
 lcol, rcol = st.columns([0.55, 0.45], gap="large")
 with lcol:
-    sty = style_table(
-        loan,
-        number_formats={"Amount of Loan":"{:,.0f}","# of Loan":"{:,.0f}"},
-        subtotal_logic=lambda r: ["background-color:#dcfce7; color:#000; font-weight:800"]*len(r) if str(r.get("Branch Name",""))=="Grand Total" else (["background-color:#fffbe6; color:#0f172a; font-weight:700"]*len(r) if str(r.get("Branch Name","")).endswith(" Total") else [""]*len(r)),
+    sty = (
+        loan.style.hide(axis="index")
+            .format({"Amount of Loan":"{:,.0f}","# of Loan":"{:,.0f}"})
+            .set_table_styles([
+                {"selector":"th","props":[("background-color","#dcfce7"),("font-weight","800")]},
+                {"selector":"thead th","props":[("background-color","#dcfce7"),("font-weight","800")]},
+                {"selector":"tbody tr:nth-child(even)","props":[("background-color","#fafafa")]}
+            ])
+            .apply(lambda r: ["background-color:#dcfce7; color:#000; font-weight:800"]*len(r) if str(r.get("Branch Name",""))=="Grand Total" else (["background-color:#fffbe6; color:#0f172a; font-weight:700"]*len(r) if str(r.get("Branch Name","")).endswith(" Total") else [""]*len(r)), axis=1)
     )
+    # Only show the table; nothing extra after Grand Total inside this section
     st.dataframe(sty, use_container_width=True, height=720)
-    st.download_button("⬇️ Loan — Excel", to_excel_bytes({"Loan": loan}), file_name="loan_disbursement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 with rcol:
     base2=loan[(~loan["Branch Name"].str.endswith(" Total")) & (loan["Branch Name"]!="Grand Total") & (loan["Types of Loan"]!="")]
     fig=px.bar(base2, x="Branch Name", y="Amount of Loan", color="Types of Loan", barmode="group", title="Amount of Loan by Branch & Type")
@@ -258,11 +254,16 @@ with rcol:
 
 st.markdown("---")
 
-st.markdown("### 🐔 Types of Poultry Rearing")
+st.markdown('<h3 class="section-title">🐔 Types of Poultry Rearing</h3>', unsafe_allow_html=True)
 p_l, p_r = st.columns([0.55, 0.45], gap="large")
 with p_l:
-    st.dataframe(style_table(poultry, number_formats={"# of MEs":"{:,.0f}","# of Birds":"{:,.0f}"}), use_container_width=True)
-    st.download_button("⬇️ Poultry — Excel", to_excel_bytes({"Poultry": poultry}), file_name="poultry_rearing.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.dataframe((poultry.style.hide(axis="index").format({"# of MEs":"{:,.0f}","# of Birds":"{:,.0f}"})
+                  .set_table_styles([
+                    {"selector":"th","props":[("background-color","#dcfce7"),("font-weight","800")]},
+                    {"selector":"thead th","props":[("background-color","#dcfce7"),("font-weight","800")]},
+                    {"selector":"tbody tr:nth-child(even)","props":[("background-color","#fafafa")]}
+                  ])),
+                 use_container_width=True)
 with p_r:
     t1, t2 = st.tabs(["# of Birds", "# of MEs"])
     with t1:
@@ -276,79 +277,18 @@ with p_r:
 
 st.markdown("---")
 
-st.markdown("### 💠 MEs Grants Information")
+st.markdown('<h3 class="section-title">💠 MEs Grants Information</h3>', unsafe_allow_html=True)
 g_l, g_r = st.columns([0.55, 0.45], gap="large")
 with g_l:
-    st.dataframe(style_table(grants, number_formats={"Amounts of Grants":"{:,.0f}","Number on MEs":"{:,.0f}"}), use_container_width=True)
-    st.download_button("⬇️ Grants — Excel", to_excel_bytes({"Grants": grants}), file_name="grants_information.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.dataframe((grants.style.hide(axis="index").format({"Amounts of Grants":"{:,.0f}","Number on MEs":"{:,.0f}"})
+                  .set_table_styles([
+                    {"selector":"th","props":[("background-color","#dcfce7"),("font-weight","800")]},
+                    {"selector":"thead th","props":[("background-color","#dcfce7"),("font-weight","800")]},
+                    {"selector":"tbody tr:nth-child(even)","props":[("background-color","#fafafa")]}
+                  ])),
+                 use_container_width=True)
 with g_r:
     gp=grants[grants["Branch Name"]!="Grand Total"].copy()
     fig_g=px.bar(gp, x="Branch Name", y="Amounts of Grants", title="Grants Amount by Branch")
     fig_g.update_traces(texttemplate="%{y:,.0f}", textposition="outside")
     st.plotly_chart(fig_g, use_container_width=True)
-
-st.markdown("---")
-
-st.markdown("## 📚 Additional Analytics Reports")
-
-st.markdown("### 🐣 Poultry KPI Summary")
-k_l, k_r = st.columns([0.55, 0.45], gap="large")
-with k_l:
-    st.dataframe(style_table(pks, number_formats={"Layer Rearing":"{:,.0f}","Broiler Rearing":"{:,.0f}","# of MEs":"{:,.0f}"}), use_container_width=True)
-    st.download_button("⬇️ Poultry KPI Summary — Excel", to_excel_bytes({"Poultry KPI Summary": pks}), file_name="poultry_kpi_summary.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-with k_r:
-    pks_long = pks[pks["Branch Name"]!="Grand Total"].melt(id_vars=["Branch Name","Sl No"], value_vars=["Layer Rearing","Broiler Rearing"], var_name="Type", value_name="Count")
-    fig_pks=px.bar(pks_long, x="Branch Name", y="Count", color="Type", barmode="group", title="Layer vs Broiler (# of MEs)")
-    fig_pks.update_traces(texttemplate="%{y:,.0f}", textposition="outside")
-    st.plotly_chart(fig_pks, use_container_width=True)
-
-st.markdown("### 🎯 Average Ticket Size")
-a_l, a_r = st.columns([0.55, 0.45], gap="large")
-with a_l:
-    st.dataframe(style_table(ats, number_formats={"# of Loan":"{:,.0f}","Amount of Loan":"{:,.0f}","Avg Ticket Size":"{:,.0f}"}), use_container_width=True)
-    st.download_button("⬇️ Average Ticket Size — Excel", to_excel_bytes({"Average Ticket Size": ats}), file_name="average_ticket_size.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-with a_r:
-    fig_ats=px.bar(ats[ats["Branch Name"]!="Grand Total"], x="Branch Name", y="Avg Ticket Size", title="Average Ticket Size by Branch")
-    fig_ats.update_traces(texttemplate="%{y:,.0f}", textposition="outside")
-    st.plotly_chart(fig_ats, use_container_width=True)
-
-st.markdown("### 💹 Grants Utilization")
-u_l, u_r = st.columns([0.55, 0.45], gap="large")
-with u_l:
-    st.dataframe(style_table(gu, number_formats={"Number on MEs":"{:,.0f}","Amounts of Grants":"{:,.0f}","Avg Grant per ME":"{:,.0f}"}), use_container_width=True)
-    st.download_button("⬇️ Grants Utilization — Excel", to_excel_bytes({"Grants Utilization": gu}), file_name="grants_utilization.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-with u_r:
-    fig_gu=px.bar(gu[gu["Branch Name"]!="Grand Total"], x="Branch Name", y="Avg Grant per ME", title="Avg Grant per ME by Branch")
-    fig_gu.update_traces(texttemplate="%{y:,.0f}", textposition="outside")
-    st.plotly_chart(fig_gu, use_container_width=True)
-
-st.markdown("### 🏆 Top 5 Branches")
-# Disbursement
-d_l, d_r = st.columns([0.55, 0.45], gap="large")
-with d_l:
-    st.markdown("**Top 5 by Disbursement**")
-    st.dataframe(style_table(topD, number_formats={"Amount of Loan":"{:,.0f}"}), use_container_width=True)
-with d_r:
-    fig_td=px.bar(topD[topD["Branch Name"]!="Grand Total"], x="Branch Name", y="Amount of Loan", title="Top 5 by Disbursement")
-    fig_td.update_traces(texttemplate="%{y:,.0f}", textposition="outside")
-    st.plotly_chart(fig_td, use_container_width=True)
-
-# Birds
-b_l, b_r = st.columns([0.55, 0.45], gap="large")
-with b_l:
-    st.markdown("**Top 5 by Birds**")
-    st.dataframe(style_table(topB, number_formats={"# of Birds":"{:,.0f}"}), use_container_width=True)
-with b_r:
-    fig_tb=px.bar(topB[topB["Branch Name"]!="Grand Total"], x="Branch Name", y="# of Birds", title="Top 5 by Birds")
-    fig_tb.update_traces(texttemplate="%{y:,.0f}", textposition="outside")
-    st.plotly_chart(fig_tb, use_container_width=True)
-
-# Grants
-g_l2, g_r2 = st.columns([0.55, 0.45], gap="large")
-with g_l2:
-    st.markdown("**Top 5 by Grants**")
-    st.dataframe(style_table(topG, number_formats={"Amounts of Grants":"{:,.0f}"}), use_container_width=True)
-with g_r2:
-    fig_tg=px.bar(topG[topG["Branch Name"]!="Grand Total"], x="Branch Name", y="Amounts of Grants", title="Top 5 by Grants")
-    fig_tg.update_traces(texttemplate="%{y:,.0f}", textposition="outside")
-    st.plotly_chart(fig_tg, use_container_width=True)
