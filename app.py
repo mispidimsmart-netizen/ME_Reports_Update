@@ -32,8 +32,8 @@ st.set_page_config(page_title="PIDIM SMART Reports", layout="wide", page_icon=lo
 # ===== CSS =====
 st.markdown("""
 <style>
-/* Give breathing room at top */
-.block-container { padding-top: 1.8rem; }
+/* More breathing room at the very top */
+.block-container { padding-top: 2.2rem; }
 
 /* Section titles */
 h3, .section-title { color:#065f46; font-weight:800; }
@@ -41,24 +41,21 @@ h3, .section-title { color:#065f46; font-weight:800; }
 /* Table header styling */
 thead th { background-color:#dcfce7 !important; font-weight:800 !important; }
 
-/* Header row lower a bit */
-.header-wrap { margin-top: 18px; margin-bottom: 8px; }
-.header-wrap .org { font-size:30px; font-weight:900; color:#16a34a; line-height:1.1; }
-.header-wrap .proj { font-size:14px; color:#334155; margin-top:4px; }
+/* Header row pushed further down, plus larger org title */
+.header-wrap { margin-top: 28px; margin-bottom: 10px; }
+.header-wrap .org { font-size:34px; font-weight:900; color:#16a34a; line-height:1.1; }
+.header-wrap .proj { font-size:15px; color:#334155; margin-top:6px; }
 .header-wrap .credit { text-align:right; font-size:12px; line-height:1.2; }
 
 /* Fixed Print button (green) at very top-right */
 #global-print { position: fixed; top: 8px; right: 12px; z-index: 10000; }
 #global-print button{
   display:flex; align-items:center; gap:8px;
-  background-color:#16a34a; color:white; border:none; padding:8px 14px;
+  background-color:#16a34a; color:white; border:none; padding:9px 16px;
   border-radius:10px; cursor:pointer; font-weight:700;
   box-shadow:0 2px 8px rgba(0,0,0,.18);
 }
 #global-print button .icon { font-size:16px; line-height:1; }
-
-/* Make sure button is not overlapped by Streamlit toolbar */
-[data-testid="stToolbar"] { z-index: 1; }
 
 @media print {
   .stButton, .stDownloadButton, [data-testid="stSidebar"], #global-print { display:none !important; }
@@ -81,7 +78,6 @@ st.markdown("""
 # ===== Header UI =====
 with st.container():
     logo = load_logo_image()
-    # Make right column slightly wider to ensure right alignment
     col_logo, col_text, col_credit = st.columns([0.12, 0.55, 0.33])
     with col_logo:
         st.image(logo, width=68)
@@ -109,10 +105,13 @@ GRANTS=col_letter_to_pos("BL")
 
 @st.cache_resource
 def sess():
+    import requests
     s=requests.Session(); s.headers.update({"User-Agent":"ME-Reports/1.0"}); return s
 
 @st.cache_data(ttl=900)
 def get_df():
+    import pandas as pd
+    from io import StringIO
     t=sess().get(URL, timeout=25).text
     df=pd.read_csv(StringIO(t), low_memory=False)
     df.columns=[str(c).strip() for c in df.columns]
@@ -123,6 +122,7 @@ def clean_branch(s):
     s=s.astype(str).str.strip(); bad=s.str.lower().isin(["","nan","none","null","branch name"]); return s.mask(bad,None)
 
 def ensure_serial(df):
+    import pandas as pd
     d=df.copy()
     if "ক্রমিক নং" in d.columns: d = d.drop(columns=["ক্রমিক নং"])
     if "Sl No" in d.columns: d["Sl No"] = range(1, len(d)+1)
@@ -133,7 +133,7 @@ HEADER_STYLE = [{"selector":"th","props":[("background-color","#dcfce7"),("font-
                 {"selector":"thead th","props":[("background-color","#dcfce7"),("font-weight","800")]},
                 {"selector":"tbody tr:nth-child(even)","props":[("background-color","#fafafa")]}]
 
-def style_table(d: pd.DataFrame, number_formats=None, subtotal_logic=None, narrow_serial=False):
+def style_table(d, number_formats=None, subtotal_logic=None, narrow_serial=False):
     sty = d.style.hide(axis="index")
     if number_formats: sty = sty.format(number_formats)
     sty = sty.set_table_styles(HEADER_STYLE)
@@ -143,6 +143,7 @@ def style_table(d: pd.DataFrame, number_formats=None, subtotal_logic=None, narro
 
 # ===== Builders =====
 def compute_branch_loan(df_in,b,t,a):
+    import pandas as pd, re
     w=df_in[[b,t,a]].copy()
     w[b]=clean_branch(w[b]); w[t]=w[t].astype(str).str.strip()
     w["_amt"]=pd.to_numeric(w[a], errors="coerce").fillna(0)
@@ -158,6 +159,7 @@ def compute_branch_loan(df_in,b,t,a):
     return g
 
 def summarize_loan_table(agg):
+    import pandas as pd
     order={"Enterprise":0,"Non-Enterprise":1}; agg["_o"]=agg["Types of Loan"].map(order).fillna(99).astype(int)
     rows=[]
     for br,g in agg.sort_values(["Branch Name","_o"]).groupby("Branch Name", sort=False):
@@ -174,6 +176,7 @@ def summarize_loan_table(agg):
     return loan
 
 def compute_poultry_me_and_birds(df_in, b, type_col, birds_col):
+    import pandas as pd
     t=df_in[[b, type_col, birds_col]].copy()
     t[b]=clean_branch(t[b])
     t[type_col]=t[type_col].astype(str).str.strip()
@@ -196,6 +199,7 @@ def compute_poultry_me_and_birds(df_in, b, type_col, birds_col):
     return long
 
 def compute_me_grants(df_in,b,gc):
+    import pandas as pd
     g=df_in[[b,gc]].copy(); g[b]=clean_branch(g[b])
     g["_gr"]=pd.to_numeric(g[gc], errors="coerce").fillna(0)
     g=g[g[b].notna()]
@@ -207,6 +211,7 @@ def compute_me_grants(df_in,b,gc):
     return rep
 
 def add_grand_total(df, numeric_cols=None):
+    import pandas as pd
     d=df.copy()
     if numeric_cols is None:
         numeric_cols = [c for c in d.columns if pd.api.types.is_numeric_dtype(d[c])]
@@ -219,6 +224,8 @@ def add_grand_total(df, numeric_cols=None):
     return d
 
 def to_excel_bytes(df_dict):
+    import pandas as pd
+    from io import BytesIO
     bio = BytesIO()
     last_err = None
     for eng in ("xlsxwriter", "openpyxl"):
@@ -248,48 +255,9 @@ grants = compute_me_grants(df,b,gcol)
 poultry = add_grand_total(poultry, numeric_cols=["# of MEs","# of Birds"])
 grants = add_grand_total(grants, numeric_cols=["Number on MEs","Amounts of Grants"])
 
-def poultry_kpi_summary_counts(poultry_long):
-    wide = poultry_long[poultry_long["Branch Name"]!="Grand Total"].pivot_table(
-        index="Branch Name", columns="Types of Poultry Rearing", values="# of MEs", aggfunc="sum"
-    ).fillna(0).reset_index()
-    for c in ("Layer Rearing","Broiler Rearing"):
-        if c not in wide: wide[c]=0
-    wide["# of MEs"]=wide["Layer Rearing"]+wide["Broiler Rearing"]
-    wide=ensure_serial(wide)
-    return add_grand_total(wide, numeric_cols=["Layer Rearing","Broiler Rearing","# of MEs"])
+# ===== UI (same sections as v5q) =====
+import plotly.express as px
 
-def average_ticket_size(loan):
-    base=loan[(~loan["Branch Name"].str.endswith(" Total")) & (loan["Branch Name"]!="Grand Total") & (loan["Types of Loan"]!="")]
-    agg=(base.groupby("Branch Name").agg(total_amount=("Amount of Loan","sum"), total_count=("# of Loan","sum")).reset_index())
-    agg["Avg Ticket Size"]=agg["total_amount"]/agg["total_count"].replace(0, pd.NA)
-    agg["Avg Ticket Size"]=agg["Avg Ticket Size"].fillna(0)
-    out=agg[["Branch Name","total_count","total_amount","Avg Ticket Size"]].rename(columns={"total_count":"# of Loan","total_amount":"Amount of Loan"})
-    out=ensure_serial(out)
-    return add_grand_total(out, numeric_cols=["# of Loan","Amount of Loan","Avg Ticket Size"])
-
-def grants_utilization_full(grants):
-    rep = grants[grants["Branch Name"]!="Grand Total"].copy()
-    rep["Avg Grant per ME"]=(pd.to_numeric(rep["Amounts of Grants"], errors="coerce")/rep["Number on MEs"].replace(0,pd.NA)).fillna(0)
-    rep=ensure_serial(rep)
-    return add_grand_total(rep, numeric_cols=["Number on MEs","Amounts of Grants","Avg Grant per ME"])
-
-def top_5_tables(loan, poultry, grants):
-    base=loan[(~loan["Branch Name"].str.endswith(" Total")) & (loan["Branch Name"]!="Grand Total") & (loan["Types of Loan"]!="")]
-    disb=base.groupby("Branch Name")["Amount of Loan"].sum().sort_values(ascending=False).head(5).reset_index(name="Amount of Loan")
-    birds=poultry[poultry["Branch Name"]!="Grand Total"].groupby("Branch Name")["# of Birds"].sum().sort_values(ascending=False).head(5).reset_index(name="# of Birds")
-    g_amt=grants[grants["Branch Name"]!="Grand Total"].groupby("Branch Name")["Amounts of Grants"].sum().sort_values(ascending=False).head(5).reset_index(name="Amounts of Grants")
-    disb=ensure_serial(disb); birds=ensure_serial(birds); g_amt=ensure_serial(g_amt)
-    disb=add_grand_total(disb, numeric_cols=["Amount of Loan"])
-    birds=add_grand_total(birds, numeric_cols=["# of Birds"])
-    g_amt=add_grand_total(g_amt, numeric_cols=["Amounts of Grants"])
-    return disb, birds, g_amt
-
-pks = poultry_kpi_summary_counts(poultry)
-ats = average_ticket_size(loan)
-gu  = grants_utilization_full(grants)
-topD, topB, topG = top_5_tables(loan, poultry, grants)
-
-# ===== UI =====
 st.markdown('<h3 class="section-title">📊 Branch Wise Loan Disbursement</h3>', unsafe_allow_html=True)
 lcol, rcol = st.columns([0.55, 0.45], gap="large")
 with lcol:
@@ -380,7 +348,7 @@ st.markdown('<h3 class="section-title">💹 Grants Utilization</h3>', unsafe_all
 u_l, u_r = st.columns([0.55, 0.45], gap="large")
 with u_l:
     gu = grants[grants["Branch Name"]!="Grand Total"].copy()
-    gu["Avg Grant per ME"]=(pd.to_numeric(gu["Amounts of Grants"], errors="coerce")/gu["Number on MEs"].replace(0,pd.NA)).fillna(0)
+    gu["Avg Grant per ME"]=(pd.to_numeric(gu["Amounts of Grants"], errors="coerce")/gu["Number on MEs"].replace(0, pd.NA)).fillna(0)
     gu = ensure_serial(gu)
     gu = add_grand_total(gu, numeric_cols=["Number on MEs","Amounts of Grants","Avg Grant per ME"])
     st.dataframe(style_table(gu, number_formats={"Number on MEs":"{:,.0f}","Amounts of Grants":"{:,.0f}","Avg Grant per ME":"{:,.0f}"}), use_container_width=True)
