@@ -33,7 +33,7 @@ st.set_page_config(page_title="PIDIM SMART Reports", layout="wide", page_icon=lo
 st.markdown("""
 <style>
 /* Extra top padding so header is clear, and leave space for fixed print button */
-.block-container { padding-top: 1.8rem; }
+.block-container { padding-top: 2.8rem; }
 
 /* Section titles */
 h3, .section-title { color:#065f46; font-weight:800; }
@@ -42,7 +42,7 @@ h3, .section-title { color:#065f46; font-weight:800; }
 thead th { background-color:#dcfce7 !important; font-weight:800 !important; }
 
 /* Header row slightly lower from top */
-.header-wrap { margin-top: 35px; margin-bottom: 8px; }
+.header-wrap { margin-top: 20px; margin-bottom: 8px; }
 .header-wrap .org { font-size:30px; font-weight:900; color:#16a34a; line-height:1.1; }
 .header-wrap .proj { font-size:14px; color:#334155; margin-top:4px; }
 .header-wrap .credit { text-align:right; font-size:12px; line-height:1.2; }
