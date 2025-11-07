@@ -42,7 +42,7 @@ h3, .section-title { color:#065f46; font-weight:800; }
 thead th { background-color:#dcfce7 !important; font-weight:800 !important; }
 
 /* Header row slightly lower from top */
-.header-wrap { margin-top: 18px; margin-bottom: 8px; }
+.header-wrap { margin-top: 25px; margin-bottom: 8px; }
 .header-wrap .org { font-size:30px; font-weight:900; color:#16a34a; line-height:1.1; }
 .header-wrap .proj { font-size:14px; color:#334155; margin-top:4px; }
 .header-wrap .credit { text-align:right; font-size:12px; line-height:1.2; }
