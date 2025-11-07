@@ -6,74 +6,89 @@ from PIL import Image
 
 URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkcagLu_YrYgQxmsO3DnHn90kqALkw9uDByX7UBNRUjaFKKQdE3V-6fm5ZcKGk_A/pub?gid=2143275417&single=true&output=csv"
 
-# Safe favicon load
-def load_favicon():
+def load_logo_image():
+    # Prefer user-provided logo.png
+    for p in ("assets/logo.png","logo.png"):
+        try:
+            return Image.open(p).convert("RGBA")
+        except Exception:
+            pass
+    # Fallback simple green badge
+    img = Image.new("RGBA",(320,120),(22,163,74,255))
+    return img
+
+def load_favicon_from_logo():
     try:
-        return Image.open("assets/favicon.png")
+        logo = load_logo_image()
+        # Fit into 64x64 with transparent background
+        fav = Image.new("RGBA",(64,64),(0,0,0,0))
+        # keep aspect ratio
+        w,h = logo.size
+        scale = min(60/w, 60/h)
+        new = logo.resize((max(1,int(w*scale)), max(1,int(h*scale))), Image.LANCZOS)
+        # center
+        nx, ny = (64-new.size[0])//2, (64-new.size[1])//2
+        fav.paste(new, (nx, ny), new)
+        return fav
     except Exception:
-        # tiny emerald square
-        import io
-        from PIL import Image
-        i = Image.new("RGBA", (64,64), (22,163,74,255))
-        return i
+        # Solid green fallback
+        return Image.new("RGBA",(64,64),(22,163,74,255))
 
-st.set_page_config(page_title="PIDIM SMART Reports", layout="wide", page_icon=load_favicon())
+st.set_page_config(page_title="PIDIM SMART Reports", layout="wide", page_icon=load_favicon_from_logo())
 
-# ===== CSS (no big green bar), header block + table header styles =====
+# ===== CSS: more top space so title never hides; header polish; table headers bold+light green =====
 st.markdown("""
 <style>
-.block-container { padding-top: 0.6rem; }
-thead th { background-color:#dcfce7 !important; font-weight:800 !important; }
+/* Give extra top padding so header never clips/hides */
+.block-container { padding-top: 1.4rem; }
+
+/* Section titles */
 h3, .section-title { color:#065f46; font-weight:800; }
-.app-header { display:flex; align-items:center; gap:14px; margin-bottom:10px; }
-.app-header .title { display:flex; flex-direction:column; }
-.app-header .org { font-size:28px; font-weight:800; color:#16a34a; }
-.app-header .proj { font-size:14px; color:#334155; }
+
+/* Table header styling */
+thead th { background-color:#dcfce7 !important; font-weight:800 !important; }
+
+/* Custom compact header row */
+.app-header { display:flex; align-items:center; gap:16px; margin:10px 0 6px 0; }
+.app-header .title { display:flex; flex-direction:column; line-height:1.1; }
+.app-header .org { font-size:30px; font-weight:900; color:#16a34a; }
+.app-header .proj { font-size:14px; color:#334155; margin-top:4px; }
 .app-header .credit { margin-left:auto; text-align:right; font-size:12px; line-height:1.2; }
+
+/* Print controls */
 #global-print { text-align:right; margin:6px 0 10px; }
 #global-print button{
   background-color:#16a34a; color:white; border:none; padding:8px 16px;
   border-radius:8px; cursor:pointer;
 }
+
 @media print {
   .stButton, .stDownloadButton, [data-testid="stSidebar"] { display:none !important; }
-  .block-container { padding: 6mm !important; }
+  .block-container { padding: 8mm !important; }
   h1, h2, h3 { color:#065f46 !important; font-weight:800 !important; }
   table { page-break-inside: avoid; }
 }
 </style>
 """, unsafe_allow_html=True)
 
-# Robust logo loader -> bytes
-def load_logo_bytes():
-    for p in ("assets/logo.png","logo.png"):
-        try:
-            with open(p,"rb") as f: return f.read()
-        except Exception: pass
-    # fallback tiny green
-    b64="iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAJElEQVR4nO3BMQEAAAwCoNm/9HI4gQAAAAAAAAAAAAAAAAAA4O8Cq4gAAc2mCicAAAAASUVORK5CYII="
-    import base64
-    return base64.b64decode(b64)
-
 # Header UI (logo + title + credit)
-lc, rc = st.columns([0.7, 0.3])
-with lc:
-    lb = load_logo_bytes()
-    c1, c2 = st.columns([0.12, 0.88])
-    with c1:
-        st.image(lb, width=64)
-    with c2:
+with st.container():
+    logo = load_logo_image()
+    col_logo, col_text, col_credit = st.columns([0.12, 0.58, 0.30])
+    with col_logo:
+        st.image(logo, width=68)
+    with col_text:
         st.markdown("<div class='org'>PIDIM Foundation</div>", unsafe_allow_html=True)
         st.markdown("<div class='proj'>Sustainable Microenterprise and Resilient Transformation (SMART) Project</div>", unsafe_allow_html=True)
-with rc:
-    st.markdown("""<div class="credit">
-      <b>Created by,</b><br/>
-      <b>Md. Moniruzzaman</b><br/>
-      MIS &amp; Documentation Officer<br/>
-      SMART Project<br/>
-      Pidim Foundation<br/>
-      Cell: 01324 168100
-    </div>""", unsafe_allow_html=True)
+    with col_credit:
+        st.markdown("""<div class="credit">
+          <b>Created by,</b><br/>
+          <b>Md. Moniruzzaman</b><br/>
+          MIS &amp; Documentation Officer<br/>
+          SMART Project<br/>
+          Pidim Foundation<br/>
+          Cell: 01324 168100
+        </div>""", unsafe_allow_html=True)
 
 # Global Print button
 st.markdown("""<div id="global-print"><button onclick="window.print()">Print</button></div>""", unsafe_allow_html=True)
@@ -128,7 +143,7 @@ def compute_branch_loan(df_in,b,t,a):
     w[b]=clean_branch(w[b]); w[t]=w[t].astype(str).str.strip()
     w["_amt"]=pd.to_numeric(w[a], errors="coerce").fillna(0)
     def norm(x):
-        x=(x or "").strip().lower(); x=re.sub(r"\s+"," ",x)
+        x=(x or "").strip().lower(); x=re.sub(r"\\s+"," ",x)
         if "non" in x and "enterprise" in x: return "Non-Enterprise"
         if "enterprise" in x: return "Enterprise"
         return x.title() if x else ""
@@ -225,11 +240,11 @@ loan = summarize_loan_table(loan_agg)
 poultry = compute_poultry_me_and_birds(df,b,pt,ub)
 grants = compute_me_grants(df,b,gcol)
 
-# Add Grand Totals (as requested)
+# Grand Totals where needed
 poultry = add_grand_total(poultry, numeric_cols=["# of MEs","# of Birds"])
 grants = add_grand_total(grants, numeric_cols=["Number on MEs","Amounts of Grants"])
 
-# KPI Summary, Average Ticket Size, Grants Utilization, Top 5
+# KPI, ATS, GU, Top 5
 def poultry_kpi_summary_counts(poultry_long):
     wide = poultry_long[poultry_long["Branch Name"]!="Grand Total"].pivot_table(
         index="Branch Name", columns="Types of Poultry Rearing", values="# of MEs", aggfunc="sum"
