@@ -64,3 +64,9 @@ def render_branch_loan_by_type(df_all, loan_type_value, title_suffix):
 
     except Exception as e:
         st.error(f"Error rendering branch report for {loan_type_value}: {e}")
+# render Agrosor
+render_branch_loan_by_type(df, "SMART-Agrosor Loan", "SMART-Agrosor Loan")
+st.markdown("---")
+# render CSL
+render_branch_loan_by_type(df, "SMART-CSL", "SMART-CSL")
+st.markdown("---")
